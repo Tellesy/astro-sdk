@@ -306,6 +306,31 @@ data class AliasAccountsResponse(
     val accounts: List<LinkedAccount>
 )
 
+@Serializable
+data class AliasAvailability(
+    @SerialName("alias_username") val aliasUsername: String,
+    val status: String,
+    val available: Boolean
+)
+
+@Serializable
+data class RenameAliasRequest(
+    @SerialName("current_alias_username") val currentAliasUsername: String,
+    @SerialName("new_alias_username") val newAliasUsername: String,
+    @SerialName("national_id") val nationalId: String
+)
+
+@Serializable
+data class RenameAliasResult(
+    @SerialName("alias_username") val aliasUsername: String,
+    @SerialName("previous_alias_username") val previousAliasUsername: String,
+    @SerialName("retired_handle") val retiredHandle: String,
+    @SerialName("previous_retired") val previousRetired: Boolean,
+    @SerialName("reauthentication_required") val reauthenticationRequired: Boolean,
+    @SerialName("next_step") val nextStep: String,
+    val message: String
+)
+
 // ─── Open Banking ────────────────────────────────────────────────────────────
 
 @Serializable

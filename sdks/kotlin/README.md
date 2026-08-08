@@ -1,4 +1,4 @@
-# @neptune-astro/kotlin — OpenWave Kotlin SDK
+# Astro Kotlin SDK
 
 Kotlin/JVM SDK for OpenWave-compatible payment gateways. Uses Ktor HTTP client with coroutines.
 
@@ -7,7 +7,7 @@ Kotlin/JVM SDK for OpenWave-compatible payment gateways. Uses Ktor HTTP client w
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("ly.neptune.astro:astro-kotlin:1.0.0")
+    implementation("ly.neptune.astro:astro-kotlin:1.1.0")
 }
 ```
 
@@ -47,87 +47,41 @@ astro.close()
 
 | Module | Description |
 |---|---|
-| `astro.payments` | Create/list/cancel sessions, refunds, mandates, and mandate charges |
-| `astro.alias` | Get profile, linked accounts, deactivate |
+| `astro.payments` | Create/list/cancel sessions, mandates |
+| `astro.alias` | Get profile, linked accounts, availability, bank-server rename, deactivate |
 | `astro.openBanking` | Consents, token exchange, accounts, transactions |
+| `astro.finance` | Credit assessment and finance-offer targets, when enabled |
 | `astro.identity` | Resolve alias, list banks |
 | `WebhookVerifier` | HMAC-SHA256 signature verification |
 | `WebhookReceiver` | Event-based webhook dispatcher |
 
-## Presented Payments
-
-The Kotlin SDK is appropriate for:
-
-- backend presentment creation and status polling
-- Android bank-app or wallet-app flows that resume after QR or NFC claim
-- direct operator implementations that still need to preserve OpenWave authorization boundaries
-
-Presented payments remain a channel layer. After claim, Astro returns `payment_url`, `mandate_consent_url`, or `auth_surface`; open that secure hosted, SDK-controlled, or bank-controlled surface and reuse the standard payment or mandate lifecycle rather than inventing a separate authorization path.
-
-OpenWave QR is not a separate proprietary barcode. Use the returned EMV TLV payload. Libya deployments should detect `LY.OPENWAVE` inside Merchant Account Information tag `26` by default, read `presentment_id` from sub-tag `01`, claim token from sub-tag `02`, channel from sub-tag `03`, and payment/mandate intent from sub-tag `04`. If that GUI is absent, keep the existing domestic QR route. NFC uses an NDEF URI, normally an HTTPS app/universal link.
-
-For recurring mandate approval, expect `auth_surface.type = "HOSTED_MANDATE_CONSENT"` or a `mandate_consent_url`.
-
-Merchant apps must not collect OTP, PIN, passcode, push approval, or bank credentials.
+## NPT availability and rename (bank server only)
 
 ```kotlin
-val presentment = astro.presentments.create(
-    CreatePresentmentRequest(
-        channel = "QR",
-        mode = "MERCHANT_PRESENTED",
-        intent = "ONE_TIME_PAYMENT",
-        amountMode = "FIXED",
-        amount = 860_000,
-        currency = "LYD",
-        description = "Neptune Store checkout"
-    ),
-    idempotencyKey = "pos-order-1042"
-)
-
-val claim = astro.presentments.claim(
-    presentment.presentmentId,
-    ClaimPresentmentRequest(
-        claimToken = presentment.presentmentPayload?.claimToken,
-        payerAlias = "tellesy@andalus"
+val bankAstro = AstroClient(
+    AstroConfig(
+        baseUrl = "https://astro.neptune.ly/api/v1",
+        bankKey = System.getenv("OPENWAVE_BANK_KEY")
     )
 )
-println("Open secure auth surface: ${claim.authSurface?.url ?: claim.paymentUrl}")
+
+val availability = bankAstro.alias.availability("mtellesy.new")
+check(availability.status != "UNKNOWN") { "Identity could not be consulted" }
+
+val result = bankAstro.alias.rename(
+    RenameAliasRequest(
+        currentAliasUsername = "mtellesy",
+        newAliasUsername = "mtellesy.new",
+        nationalId = "123456789012"
+    )
+)
+check(result.previousRetired) // the old NPT name can never be reused
+check(result.reauthenticationRequired)
+println(result.retiredHandle)
+println(result.nextStep) // End old sessions; sign in again with the new NPT name.
 ```
 
-## Refunds and recurring charges
-
-```kotlin
-astro.payments.createRefund(
-    sessionId = session.sessionId,
-    request = CreateRefundRequest(
-        amount = 20_000,
-        currency = "LYD",
-        merchantReference = "refund-order-1042-item-1",
-        reason = "Customer returned one item"
-    ),
-    idempotencyKey = "refund-order-1042-item-1"
-)
-
-val mandate = astro.payments.createMandate(
-    CreateMandateRequest(
-        payerAlias = "tellesy@andalus",
-        amountLimit = 50_000,
-        currency = "LYD",
-        frequency = "MONTHLY",
-        description = "Premium support plan",
-        consentRedirectUrl = "https://merchant.example/subscription/return"
-    ),
-    idempotencyKey = "sub-1042"
-)
-
-astro.payments.chargeMandate(
-    mandate.mandateId,
-    ChargeMandateRequest(amount = 50_000, description = "Premium support monthly charge"),
-    idempotencyKey = "sub-1042-2026-05"
-)
-```
-
-Fulfil orders only from a trusted backend after a signed `payment.completed` webhook or final server status confirms completion. Frontend redirects and `payment.settlement_pending` are customer experience signals, not fulfilment evidence.
+Keep the bank key and national ID on the bank server. Propagate `nextStep` to the authenticated bank app and enforce `reauthenticationRequired` before continuing. OpenWave Identity remains authoritative for ownership, permanent retirement, and login-approval challenges.
 
 ## Webhook Handler (Ktor server)
 
@@ -188,6 +142,10 @@ val tokens = astro.openBanking.exchangeCode(
 val accounts = astro.openBanking.getAccounts(tokens.accessToken, consent.consentId)
 val txns = astro.openBanking.getTransactions(tokens.accessToken, consent.consentId, accounts[0].accountId)
 ```
+
+## Credit & Finance target
+
+Use server-side Kotlin for Credit & Finance orchestration when the deployment exposes the module. Customer acceptance still happens in hosted Astro UI, not inside merchant UI.
 
 ## License
 

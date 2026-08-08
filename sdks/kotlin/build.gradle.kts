@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "ly.neptune.astro"
-version = "1.0.0"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -32,19 +32,19 @@ publishing {
         create<MavenPublication>("maven") {
             groupId = "ly.neptune.astro"
             artifactId = "astro-kotlin"
-            version = "1.0.0"
+            version = "1.1.0"
             from(components["java"])
             pom {
                 name.set("Astro Kotlin SDK")
                 description.set("Kotlin SDK for the Astro OpenWave payment gateway")
-                url.set("https://github.com/Tellesy/astro-sdk")
+                url.set("https://github.com/neptune-ly/astro-sdk")
             }
         }
     }
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/Tellesy/astro-sdk")
+            url = uri("https://maven.pkg.github.com/neptune-ly/astro-sdk")
             credentials {
                 username = System.getenv("GITHUB_ACTOR") ?: ""
                 password = System.getenv("GITHUB_TOKEN") ?: ""

@@ -21,8 +21,21 @@ class AliasClient {
     return AliasProfile.fromJson(json as Map<String, dynamic>);
   }
 
+  /// Bank-server only. UNKNOWN is a registry transport state, not availability.
+  Future<AliasAvailability> availability(String alias) async {
+    final encoded = Uri.encodeComponent(alias);
+    final json = await _http.get('/alias/$encoded/availability');
+    return AliasAvailability.fromJson(json as Map<String, dynamic>);
+  }
+
+  /// Bank-server only. Identity permanently retires the previous NPT name.
+  Future<RenameAliasResult> rename(RenameAliasRequest request) async {
+    final json = await _http.patch('/alias/rename', request.toJson());
+    return RenameAliasResult.fromJson(json as Map<String, dynamic>);
+  }
+
   Future<ResolveResult> resolve(String alias) async {
-    final json = await _http.get('/alias/$alias/resolve');
+    final json = await _http.get('/identity/resolve', params: {'alias': alias});
     return ResolveResult.fromJson(json as Map<String, dynamic>);
   }
 }

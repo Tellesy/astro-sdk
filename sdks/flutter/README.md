@@ -10,7 +10,7 @@ dependencies:
   astro_sdk:
     path: ../packages/astro-flutter  # local
     # OR once published:
-    # astro_sdk: ^1.0.0
+    # astro_sdk: ^1.1.0
 ```
 
 ## Quick Start
@@ -43,11 +43,38 @@ print('Routes to bank: ${resolved.bankHandle}');
 
 | Client | Methods |
 |---|---|
-| `astro.payments` | `createSession`, `getSession`, `cancelSession`, `listSessions`, `createRefund`, `listRefunds`, `createMandate`, `chargeMandate`, `listMandateCharges` |
-| `astro.alias` | `getProfile`, `getAccounts`, `resolve`, `deactivate` |
+| `astro.payments` | `createSession`, `getSession`, `cancelSession`, `listSessions`, `createMandate` |
+| `astro.alias` | `getProfile`, `getAccounts`, `resolve`, `deactivate`, `availability`, `rename` |
 | `astro.openBanking` | `createConsent`, `exchangeCode`, `refreshToken`, `getAccounts`, `getTransactions` |
+| Credit & Finance handoff | Open hosted offer acceptance URL returned by your backend |
 | `astro.identity` | `resolve`, `listBanks`, `getBank` |
 | `WebhookVerifier` | `verify`, `parse`, `handleRaw` |
+
+## NPT availability and rename (bank backend only)
+
+Do not configure a bank key or send a national ID from a customer Flutter build. Call these methods only from a trusted Dart backend or through your bank backend:
+
+```dart
+final bankAstro = AstroClient(AstroConfig(
+  baseUrl: 'https://astro.neptune.ly/api/v1',
+  bankKey: Platform.environment['OPENWAVE_BANK_KEY'],
+));
+
+final availability = await bankAstro.alias.availability('mtellesy.new');
+if (availability.status == 'UNKNOWN') {
+  throw StateError('Identity could not be consulted; do not attempt the rename');
+}
+
+final result = await bankAstro.alias.rename(const RenameAliasRequest(
+  currentAliasUsername: 'mtellesy',
+  newAliasUsername: 'mtellesy.new',
+  nationalId: '123456789012',
+));
+// The bank backend must propagate this boundary to the authenticated app.
+assert(result.previousRetired && result.reauthenticationRequired);
+print(result.retiredHandle);
+print(result.nextStep); // End old sessions; sign in again with the new NPT name.
+```
 
 ## Flutter Payment Flow
 
@@ -68,72 +95,6 @@ if (uri.path == '/result') {
   }
 }
 ```
-
-## Presented Payments
-
-Flutter is suitable for bank apps, wallet apps, and merchant apps that need to render QR, start NFC handoff, or resume the flow after a presentment claim.
-
-- For gateway-mediated presentments, create the presentment on your backend and open the returned `payment_url`, `mandate_consent_url`, or `auth_surface`.
-- For direct bank or wallet presentments, keep the same OpenWave consent and SCA model inside your controlled app surface.
-- For QR scanning in Libya, parse normal EMV/NUMO QR first. Route to OpenWave only when a Merchant Account Information template contains `00 = LY.OPENWAVE`; otherwise keep the existing LYPay/NUMO QR path.
-
-For recurring mandate approval, expect `auth_surface.type = "HOSTED_MANDATE_CONSENT"` or a `mandate_consent_url`.
-
-Do not collect OTP, PIN, passcode, push approval, bank credentials, or approval secrets in custom merchant widgets.
-
-```dart
-final presentment = await astro.presentments.create({
-  'channel': 'QR',
-  'mode': 'MERCHANT_PRESENTED',
-  'intent': 'ONE_TIME_PAYMENT',
-  'amount_mode': 'FIXED',
-  'amount': 860000,
-  'currency': 'LYD',
-  'description': 'Neptune Store checkout',
-}, idempotencyKey: 'pos-order-1042');
-
-final claim = await astro.presentments.claim(presentment.presentmentId, {
-  'claim_token': presentment.presentmentPayload?.claimToken,
-  'payer_alias': 'tellesy@andalus',
-});
-
-await launchUrl(Uri.parse(claim.authSurface?.url ?? claim.paymentUrl!));
-```
-
-OpenWave QR uses EMV tag `26` by default. Sub-tags are `00 = LY.OPENWAVE`, `01 = presentment_id`, `02 = claim_token`, `03 = QR`, and `04 = P` or `M`. Optional operator metadata uses tag `50` with `00 = LY.OPENWAVE.OP` and `01 = operator_id`. NFC uses an NDEF URI record, preferably an HTTPS universal/app link that resolves to the same claim flow.
-
-## Refunds and recurring charges
-
-```dart
-await astro.payments.createRefund(
-  session.sessionId,
-  const CreateRefundRequest(
-    amount: 20000,
-    currency: 'LYD',
-    merchantReference: 'refund-order-1042-item-1',
-    reason: 'Customer returned one item',
-  ),
-  idempotencyKey: 'refund-order-1042-item-1',
-);
-
-final mandate = await astro.payments.createMandate(
-  payerAlias: 'tellesy@andalus',
-  amountLimit: 50000,
-  currency: 'LYD',
-  frequency: 'MONTHLY',
-  description: 'Premium support plan',
-  consentRedirectUrl: 'myapp://subscription/return',
-);
-
-await astro.payments.chargeMandate(
-  mandateId: mandate.mandateId,
-  amount: 50000,
-  description: 'Premium support monthly charge',
-  idempotencyKey: 'sub-1042-2026-05',
-);
-```
-
-Fulfil orders only from your backend after a signed `payment.completed` webhook or final server status confirms completion. Do not fulfil from a mobile callback or `payment.settlement_pending`.
 
 ## Webhook Verification (Dart server / edge function)
 
@@ -187,6 +148,15 @@ final accounts = await astro.openBanking.getAccounts(
 final txns = await astro.openBanking.getTransactions(
   tokens.accessToken, consent.consentId, accounts.first.accountId,
 );
+```
+
+## Credit & Finance handoff
+
+Flutter apps should not create finance assessments directly. Your backend creates the assessment and offer, then returns the hosted `accept_url`.
+
+```dart
+final acceptUrl = await merchantApi.createFinanceOffer(orderId);
+await launchUrl(Uri.parse(acceptUrl), mode: LaunchMode.externalApplication);
 ```
 
 ## Error Handling

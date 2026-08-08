@@ -70,13 +70,26 @@ final class AstroHTTPClient {
         if (200..<300).contains(http.statusCode) {
             return try decoder.decode(T.self, from: data)
         }
-        let errorBody = try? JSONDecoder().decode([String: [String: String]].self, from: data)
-        let err = errorBody?["error"]
+        let errorBody = try? decoder.decode(AstroErrorEnvelope.self, from: data)
+        let err = errorBody?.error
         throw AstroError(
             statusCode: http.statusCode,
-            code: err?["code"] ?? "UNKNOWN_ERROR",
-            message: err?["message"] ?? "HTTP \(http.statusCode)",
-            detail: err?["detail"]
+            code: err?.code ?? errorBody?.code ?? "UNKNOWN_ERROR",
+            message: err?.message ?? errorBody?.message ?? "HTTP \(http.statusCode)",
+            detail: err?.detail ?? errorBody?.detail
         )
     }
+}
+
+private struct AstroErrorPayload: Decodable {
+    let code: String?
+    let message: String?
+    let detail: String?
+}
+
+private struct AstroErrorEnvelope: Decodable {
+    let error: AstroErrorPayload?
+    let code: String?
+    let message: String?
+    let detail: String?
 }

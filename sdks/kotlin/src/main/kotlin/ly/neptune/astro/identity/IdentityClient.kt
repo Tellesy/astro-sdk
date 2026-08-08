@@ -6,11 +6,11 @@ import ly.neptune.astro.models.*
 class IdentityClient internal constructor(private val engine: HttpEngine) {
 
     suspend fun resolve(alias: String): ResolveResult =
-        engine.get("/v1/registry/resolve/$alias")
+        engine.get("/identity/resolve", mapOf("alias" to alias))
 
     suspend fun listBanks(): List<BankEntry> =
-        engine.get("/v1/banks")
+        engine.get("/banks")
 
     suspend fun getBank(bankHandle: String): BankEntry =
-        engine.get("/v1/banks/$bankHandle")
+        engine.get("/banks/$bankHandle")
 }

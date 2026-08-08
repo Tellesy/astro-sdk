@@ -1,7 +1,8 @@
 name: astro_sdk
 description: Astro SDK for OpenWave payments — Neptune Fintech
-version: 1.0.0
-homepage: https://github.com/Tellesy/neptune-astro/tree/main/packages/astro-flutter
+version: 1.1.0
+homepage: https://neptune-ly.github.io/astro-sdk/sdks/flutter.html
+repository: https://github.com/neptune-ly/astro-sdk/tree/main/sdks/flutter
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

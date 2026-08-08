@@ -55,10 +55,6 @@ checkout({
 4. **Customer authenticates with bank SCA** — OTP or push approval is handled in the hosted surface
 5. **Payment completes** — `onSuccess` fires and Astro sends a signed webhook to your backend
 
-Astro renders approved merchant, bank, TPP, and gateway branding inside the hosted surface when the session includes it. Your page may show the same approved display name, logo, brand color, and environment label around the checkout button, but those values are not a security decision and cannot replace backend webhook verification.
-
-For production launch guidance, see the [Astro SDK production readiness guide](https://neptune-ly.github.io/astro-sdk/guide/production-readiness.html).
-
 ## Flow Diagram
 
 ```
@@ -95,15 +91,11 @@ Your page                  Widget                    Astro Gateway
 
 ## Presented Payments
 
-The web drop-in is also the correct authorization surface after a QR or NFC presentment is claimed. Your merchant page may display a QR code or expose an NFC handoff, but once the customer claims that presentment the claim-returned hosted URL, secure session, or SDK sheet owns the SCA step.
+This widget is also the correct secure surface after a QR or NFC presentment is claimed. The merchant page may render a QR code or expose an NFC handoff, but the customer should still land in the Astro-controlled authorization surface before the payment or mandate becomes final.
 
-QR rendering should use the operator-returned `qr_payload.value` when available. For Libya interoperability this value is an EMV/NUMO-compatible TLV payload with the OpenWave template in tag `26` and optional operator metadata in tag `50`; do not invent a second merchant QR format in the browser. NFC handoff should use an NDEF URI or universal/app link that resolves to the same presentment claim.
+## Credit & Finance handoff
 
-For recurring subscriptions, presentment may start the mandate approval flow. The claim response should use `auth_surface.type = "HOSTED_MANDATE_CONSENT"` or return `mandate_consent_url`, and the customer still sees the full mandate scope, amount rules, and frequency before approving with bank OTP or push.
-
-Merchant pages must not render OTP, PIN, passcode, push approval, or bank credential inputs for bank authorization.
-
-Fulfilment must happen on your backend after a signed `payment.completed` webhook or final server status confirms completion. Do not ship goods or activate subscriptions from a browser callback or `payment.settlement_pending`.
+Finance assessment and offer creation stay on your backend. The frontend should receive only the hosted offer `acceptUrl` and open it in the Astro-controlled surface where the customer sees amount, tenor, disclosure, repayment schedule, and Murabaha terms where applicable.
 
 ## License
 
