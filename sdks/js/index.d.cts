@@ -338,12 +338,36 @@ interface AliasAccountsResponse {
     alias_username: string;
     accounts: LinkedAccount[];
 }
+type AliasAvailabilityStatus = 'AVAILABLE' | 'TAKEN' | 'RETIRED' | 'INVALID' | 'UNKNOWN';
+interface AliasAvailability {
+    alias_username: string;
+    status: AliasAvailabilityStatus;
+    available: boolean;
+}
+interface RenameAliasParams {
+    current_alias_username: string;
+    new_alias_username: string;
+    national_id: string;
+}
+interface RenameAliasResult {
+    alias_username: string;
+    previous_alias_username: string;
+    retired_handle: string;
+    previous_retired: true;
+    reauthentication_required: true;
+    next_step: string;
+    message: string;
+}
 declare class AliasClient {
     private http;
     constructor(http: HttpClient);
     get(username: string): Promise<AliasProfile>;
     getAccounts(username: string): Promise<AliasAccountsResponse>;
     deactivate(username: string): Promise<void>;
+    /** Bank-server only. UNKNOWN means Identity could not be consulted; never treat it as available. */
+    availability(username: string): Promise<AliasAvailability>;
+    /** Bank-server only. A successful rename permanently retires the previous NPT name. */
+    rename(params: RenameAliasParams): Promise<RenameAliasResult>;
     resolve(alias: string): Promise<{
         iban: string;
         bank_handle: string;
@@ -527,7 +551,7 @@ declare class IdentityClient {
     getRegistryInfo(): Promise<RegistryInfo>;
 }
 
-type PresentmentChannel = 'QR' | 'NFC';
+type PresentmentChannel = 'QR' | 'NFC' | 'APP_HANDOFF';
 type PresentmentMode = 'MERCHANT_PRESENTED';
 type PresentmentIntent = 'ONE_TIME_PAYMENT' | 'MANDATE_APPROVAL';
 type PresentmentAmountMode = 'FIXED' | 'OPEN';
@@ -577,7 +601,7 @@ interface ClaimPresentmentParams {
     cancel_url?: string;
 }
 interface PresentmentPayload {
-    type: 'OPENWAVE_QR_URI' | 'OPENWAVE_NFC_URI' | string;
+    type: 'OPENWAVE_QR_URI' | 'OPENWAVE_NFC_URI' | 'OPENWAVE_APP_HANDOFF_URI' | string;
     uri: string;
     qr_payload?: string;
     nfc_payload?: string;
@@ -589,8 +613,34 @@ interface AuthSurface {
     session_id?: string;
     expires_at?: string;
 }
+interface PresentmentCustomerReview {
+    title: string;
+    merchant?: {
+        merchant_id: string;
+        display_name: string;
+        reference?: string;
+    };
+    merchant_name?: string;
+    description: string;
+    amount_mode: PresentmentAmountMode;
+    amount?: number;
+    currency: Currency;
+    intent: PresentmentIntent;
+    channel: PresentmentChannel;
+    mode: PresentmentMode;
+    payer_alias?: string;
+    payer_iban_masked?: string;
+    payer_display?: string;
+    supported_auth_methods: string[];
+    recurrence?: Record<string, unknown>;
+    recurring_terms?: Record<string, unknown>;
+    fee_disclosure: string;
+    expires_at: string;
+}
 interface Presentment {
     presentment_id: string;
+    merchant_id?: number;
+    merchant_name?: string;
     status: PresentmentStatus;
     channel: PresentmentChannel;
     mode: PresentmentMode;
@@ -605,6 +655,9 @@ interface Presentment {
     payment_url?: string;
     mandate_id?: string;
     mandate_consent_url?: string;
+    payer_alias?: string;
+    payer_iban_masked?: string;
+    customer_review: PresentmentCustomerReview;
     auth_surface?: AuthSurface;
     supported_auth_methods: string[];
     metadata?: unknown;
@@ -621,6 +674,7 @@ interface PresentmentStatusResponse {
     payment_url?: string;
     mandate_id?: string;
     mandate_consent_url?: string;
+    customer_review: PresentmentCustomerReview;
     auth_surface?: AuthSurface;
     expires_at: string;
     updated_at: string;
@@ -861,4 +915,4 @@ declare function createCheckoutClient(opts: {
     timeout?: number;
 }): CheckoutClient;
 
-export { type AcceptFinanceOfferParams, type AliasAccountsResponse, AliasClient, type AliasProfile, AstroClient, type AstroConfig, type AstroError, AstroRequestError, type AuthSurface, type BankCapabilities, type BankEntry, type ChargeMandateParams, CheckoutClient, type ClaimHandleParams, type ClaimPresentmentParams, type ConfirmParams, type ConfirmResult, type Consent, type ConsentStatus, type CreateConsentParams, type CreateCreditAssessmentParams, type CreateFinanceOfferParams, type CreateMandateParams, type CreatePaymentOrderParams, type CreatePresentmentParams, type CreateRefundParams, type CreateSessionParams, type CreditAssessment, type CreditAssessmentPurpose, type CreditAssessmentStatus, type Currency, type DataWindow, type Destination, type FeePreview, FinanceAssessmentsClient, type FinanceCapabilities, FinanceClient, type FinanceContract, type FinanceContractStatus, FinanceContractsClient, type FinanceOffer, type FinanceOfferStatus, FinanceOffersClient, type FinanceProductType, HttpClient, type IdentityAccount, IdentityClient, type IdentityProfile, type LinkedAccount, type ListMandateChargesResponse, type ListMandatesParams, type ListMandatesResponse, type ListPresentmentsResponse, type ListSessionsParams, type ListSessionsResponse, type Mandate, type MandateCharge, type MandateStatus, type MurabahaTerms, type OBAccount, type OBBalance, type OBScope, type OBTransaction, type OBTransactionsResponse, OpenBankingClient, type Pagination, type PaymentOrder, type PaymentOrderStatus, type PaymentSession, type PaymentStatus, PaymentsClient, type PresentedPaymentCapabilities, type Presentment, type PresentmentAmountMode, type PresentmentChannel, type PresentmentFrequency, type PresentmentIntent, type PresentmentMode, type PresentmentPayload, type PresentmentStatus, type PresentmentStatusResponse, type PresentmentWriteOptions, PresentmentsClient, type RefreshCreditAssessmentParams, type Refund, type RefundListResponse, type RegistryInfo, type RepaymentInstallment, type RepaymentInstallmentStatus, type RepaymentSchedule, type ResolvePayerParams, type ResolvePayerResult, type ResolveResult, type SelectAuthParams, type SelectAuthResult, type Tenor, type TokenResponse, type WebhookEvent, type WebhookHandler, type WebhookPayload, WebhookReceiver, type WriteOptions, createCheckoutClient, createClient, parseWebhookPayload, verifyWebhookSignature };
+export { type AcceptFinanceOfferParams, type AliasAccountsResponse, type AliasAvailability, type AliasAvailabilityStatus, AliasClient, type AliasProfile, AstroClient, type AstroConfig, type AstroError, AstroRequestError, type AuthSurface, type BankCapabilities, type BankEntry, type ChargeMandateParams, CheckoutClient, type ClaimHandleParams, type ClaimPresentmentParams, type ConfirmParams, type ConfirmResult, type Consent, type ConsentStatus, type CreateConsentParams, type CreateCreditAssessmentParams, type CreateFinanceOfferParams, type CreateMandateParams, type CreatePaymentOrderParams, type CreatePresentmentParams, type CreateRefundParams, type CreateSessionParams, type CreditAssessment, type CreditAssessmentPurpose, type CreditAssessmentStatus, type Currency, type DataWindow, type Destination, type FeePreview, FinanceAssessmentsClient, type FinanceCapabilities, FinanceClient, type FinanceContract, type FinanceContractStatus, FinanceContractsClient, type FinanceOffer, type FinanceOfferStatus, FinanceOffersClient, type FinanceProductType, HttpClient, type IdentityAccount, IdentityClient, type IdentityProfile, type LinkedAccount, type ListMandateChargesResponse, type ListMandatesParams, type ListMandatesResponse, type ListPresentmentsResponse, type ListSessionsParams, type ListSessionsResponse, type Mandate, type MandateCharge, type MandateStatus, type MurabahaTerms, type OBAccount, type OBBalance, type OBScope, type OBTransaction, type OBTransactionsResponse, OpenBankingClient, type Pagination, type PaymentOrder, type PaymentOrderStatus, type PaymentSession, type PaymentStatus, PaymentsClient, type PresentedPaymentCapabilities, type Presentment, type PresentmentAmountMode, type PresentmentChannel, type PresentmentCustomerReview, type PresentmentFrequency, type PresentmentIntent, type PresentmentMode, type PresentmentPayload, type PresentmentStatus, type PresentmentStatusResponse, type PresentmentWriteOptions, PresentmentsClient, type RefreshCreditAssessmentParams, type Refund, type RefundListResponse, type RegistryInfo, type RenameAliasParams, type RenameAliasResult, type RepaymentInstallment, type RepaymentInstallmentStatus, type RepaymentSchedule, type ResolvePayerParams, type ResolvePayerResult, type ResolveResult, type SelectAuthParams, type SelectAuthResult, type Tenor, type TokenResponse, type WebhookEvent, type WebhookHandler, type WebhookPayload, WebhookReceiver, type WriteOptions, createCheckoutClient, createClient, parseWebhookPayload, verifyWebhookSignature };

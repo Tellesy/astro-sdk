@@ -18,7 +18,7 @@ npm install @neptune.fintech/astro-sdk
 import { createClient } from '@neptune.fintech/astro-sdk'
 
 const astro = createClient({
-  baseUrl: 'https://astro.neptune.ly',
+  baseUrl: 'https://astro.neptune.ly/api/v1',
   merchantKey: process.env.OPENWAVE_MERCHANT_KEY,
 })
 
@@ -36,22 +36,6 @@ const session = await astro.payments.createSession({
 
 console.log(session.checkout_url) // redirect customer here
 ```
-
-## Environments and Branding
-
-Keep sandbox and live integrations as separate backend configurations. Use separate merchant keys, webhook secrets, redirect origins, callback URLs, and reconciliation targets; do not pass an environment switch from browser or mobile code.
-
-Hosted session responses may include approved merchant branding and environment metadata:
-
-```ts
-const session = await astro.payments.getSession(sessionId)
-
-console.log(session.environment)                 // 'SANDBOX' | 'LIVE'
-console.log(session.merchant_branding?.logo_url) // render-only display metadata
-console.log(session.merchant_branding?.brand_color)
-```
-
-Treat branding as display metadata only. Your backend must still verify final signed webhooks or trusted server status before fulfilment.
 
 ## Modules
 
@@ -71,23 +55,10 @@ Use the backend SDK to create presentments for:
 
 - merchant-presented QR
 - merchant-presented NFC
-- merchant-presented app handoff
+- app handoff launched from a merchant presentment
 - recurring mandate approval launched from QR or NFC
 
-After claim, Astro returns `payment_url`, `mandate_consent_url`, or `auth_surface`. Merchant apps must open that secure hosted, SDK-controlled, or bank-controlled surface and must not collect OTP, PIN, passcode, push approval, or bank credentials.
-
-When `channel` is `QR`, render the OpenWave EMV QR value returned by the operator. In Libya deployments this is NUMO-compatible EMV TLV with the OpenWave template in tag `26`:
-
-| Tag | Meaning |
-|---|---|
-| `26.00` | `LY.OPENWAVE` GUI |
-| `26.01` | `presentment_id` |
-| `26.02` | short-lived claim token or signed reference |
-| `26.03` | channel code, normally `QR` |
-| `26.04` | intent code, `P` for payment or `M` for mandate approval |
-| `50.00` / `50.01` | optional `LY.OPENWAVE.OP` operator template and operator id |
-
-Existing NUMO/LYPay QR codes continue down the existing QR route. A scanner should route to OpenWave only when it finds the `LY.OPENWAVE` GUI inside an EMV Merchant Account Information template.
+After claim, Astro should hand the customer into the same trusted hosted or SDK-controlled authorization surface used by the rest of the platform.
 
 ```ts
 const presentment = await astro.presentments.create({
@@ -104,10 +75,10 @@ const presentment = await astro.presentments.create({
 })
 
 // Render this as a QR code or NFC URI in your controlled merchant app.
-console.log(presentment.presentment_payload.qr_payload?.value ?? presentment.presentment_payload.uri)
+console.log(presentment.presentment_payload.uri)
 ```
 
-For subscription approval, create a mandate presentment with a fixed amount limit and frequency. After claim, send the customer to `mandate_consent_url` or `auth_surface.url`; mandate claims should use `auth_surface.type = "HOSTED_MANDATE_CONSENT"`. Astro shows the mandate terms and completes OTP or push authorization before the mandate becomes active.
+For subscription approval, create a mandate presentment with a fixed amount limit and frequency. After claim, send the customer to `mandate_consent_url`; Astro shows the mandate terms and completes OTP or push authorization before the mandate becomes active.
 
 ```ts
 const subscription = await astro.presentments.create({
@@ -226,6 +197,29 @@ await astro.payments.chargeMandate(
 ```ts
 const profile = await astro.alias.get('mtellesy')
 const { accounts } = await astro.alias.getAccounts('mtellesy')
+
+// Bank-server only: never ship a bank key or national ID to a browser/mobile bundle.
+const bankAstro = createClient({
+  baseUrl: 'https://astro.neptune.ly/api/v1',
+  bankKey: process.env.OPENWAVE_BANK_KEY,
+})
+
+const availability = await bankAstro.alias.availability('mtellesy.new')
+if (availability.status === 'UNKNOWN') {
+  throw new Error('Identity could not be consulted; retry without attempting the rename')
+}
+
+const renamed = await bankAstro.alias.rename({
+  current_alias_username: 'mtellesy',
+  new_alias_username: 'mtellesy.new',
+  national_id: '123456789012',
+})
+console.log(renamed.previous_retired) // true — the previous name can never be reused
+console.log(renamed.retired_handle) // mtellesy
+if (renamed.reauthentication_required) {
+  // Propagate next_step to the authenticated bank app and end any cached old-handle session.
+  console.log(renamed.next_step)
+}
 ```
 
 ### `astro.openBanking`
@@ -271,14 +265,9 @@ const { transactions } = await astro.openBanking.getTransactions(
 const resolved = await astro.identity.resolve('mtellesy')
 // { iban: 'LY83...', bank_handle: 'andalus', currency: 'LYD' }
 
-// Claim a handle (bank key required)
-await astro.identity.claimHandle({
-  npt_handle: 'mtellesy',
-  iban: 'LY83002700100099900001',
-  customer_display_name: 'Mohamed T.',
-  bank_customer_ref: 'CUST-001',
-})
 ```
+
+OpenWave Identity owns identity creation, handle ownership, permanent retirement, and login-approval challenges. Astro exposes public resolution and a bank-authenticated alias availability/rename proxy; it does not duplicate Identity's login-approval API.
 
 ### Webhook Verification
 
@@ -289,8 +278,6 @@ const receiver = new WebhookReceiver(process.env.WEBHOOK_SECRET!)
 
 receiver.on('payment.completed', async (payload) => {
   const { session_id, reference } = payload.data as any
-  const eventId = payload.id ?? payload.event_id
-  // Persist eventId before fulfilment so retries stay idempotent.
   await fulfillOrder(reference)
 })
 
@@ -298,16 +285,9 @@ receiver.on('payment.failed', async (payload) => {
   console.error('Payment failed:', payload.data)
 })
 
-receiver.on('payment.reconciliation_required', async (payload) => {
-  // The bank execution result is unknown. Hold fulfilment and escalate to operations.
-  await holdOrderForManualReview((payload.data as any).session_id)
-})
-
 // In your HTTP handler:
 await receiver.handle(rawBodyString, req.headers['x-openwave-signature'])
 ```
-
-Fulfil only after your backend verifies a signed final event, normally `payment.completed`. Do not fulfil from frontend redirects, mobile callbacks, hosted checkout return states, `payment.settlement_pending`, or `payment.reconciliation_required`.
 
 ## Error Handling
 

@@ -508,6 +508,53 @@ public struct LinkedAccount: Codable {
     }
 }
 
+public struct AliasAvailability: Codable {
+    public let aliasUsername: String
+    public let status: String
+    public let available: Bool
+    enum CodingKeys: String, CodingKey {
+        case aliasUsername = "alias_username"
+        case status, available
+    }
+}
+
+public struct RenameAliasRequest: Codable {
+    public let currentAliasUsername: String
+    public let newAliasUsername: String
+    public let nationalId: String
+
+    public init(currentAliasUsername: String, newAliasUsername: String, nationalId: String) {
+        self.currentAliasUsername = currentAliasUsername
+        self.newAliasUsername = newAliasUsername
+        self.nationalId = nationalId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case currentAliasUsername = "current_alias_username"
+        case newAliasUsername = "new_alias_username"
+        case nationalId = "national_id"
+    }
+}
+
+public struct RenameAliasResult: Codable {
+    public let aliasUsername: String
+    public let previousAliasUsername: String
+    public let retiredHandle: String
+    public let previousRetired: Bool
+    public let reauthenticationRequired: Bool
+    public let nextStep: String
+    public let message: String
+    enum CodingKeys: String, CodingKey {
+        case aliasUsername = "alias_username"
+        case previousAliasUsername = "previous_alias_username"
+        case retiredHandle = "retired_handle"
+        case previousRetired = "previous_retired"
+        case reauthenticationRequired = "reauthentication_required"
+        case nextStep = "next_step"
+        case message
+    }
+}
+
 // MARK: - Open Banking
 
 public struct Consent: Codable {

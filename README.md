@@ -17,7 +17,7 @@ Official SDKs for **Neptune. Astro**, the OpenWave gateway implementation by Nep
 | SDK | Language | Install |
 |---|---|---|
 | [`sdks/js`](./sdks/js) | TypeScript / Node.js 18+ | `npm install @neptune.fintech/astro-sdk` |
-| [`sdks/react`](./sdks/react) | React 18+ | `npm install @neptune-astro/react` |
+| [`sdks/react`](./sdks/react) | React 18+ | `npm install @neptune.fintech/astro-react` |
 | [`sdks/web`](./sdks/web) | Browser drop-in | `<script src="astro.js">` |
 | [`sdks/flutter`](./sdks/flutter) | Flutter / Dart 3+ | pub.dev / git |
 | [`sdks/kotlin`](./sdks/kotlin) | Kotlin / JVM | Gradle |
@@ -39,16 +39,26 @@ dependencies:
       path: sdks/flutter
 ```
 
-### Swift (SPM)
+### Swift (SPM, local package)
 ```swift
 // Package.swift
-.package(url: "https://github.com/neptune-ly/astro-sdk.git", from: "1.0.0")
+.package(path: "../astro-sdk/sdks/swift")
 ```
+
+The Swift package currently lives under `sdks/swift`; clone this monorepo and add that directory locally. The repository root is not a Swift package manifest.
+
+All API clients use an Astro base URL ending in `/api/v1`, for example `https://astro.neptune.ly/api/v1`. SDK method paths are relative to that prefix.
+
+## NPT lifecycle ownership
+
+OpenWave Identity is authoritative for NPT ownership, permanent retirement, and login-approval challenges. Astro provides public resolution plus bank-server availability and rename methods. `UNKNOWN` availability means Identity could not be consulted and must never be treated as free. A successful rename exposes `retired_handle`, `previous_retired: true`, `reauthentication_required: true`, and Identity's `next_step`; end old-handle sessions and require sign-in with the new NPT name before continuing.
+
+Keep bank keys and national IDs on bank servers. Astro does not duplicate Identity login approvals, and browser/mobile packages intentionally do not expose rename UI hooks.
 
 ### Kotlin (Gradle)
 ```kotlin
 dependencies {
-    implementation("ly.neptune.astro:astro-kotlin:1.0.0")
+    implementation("ly.neptune.astro:astro-kotlin:1.1.0")
 }
 ```
 

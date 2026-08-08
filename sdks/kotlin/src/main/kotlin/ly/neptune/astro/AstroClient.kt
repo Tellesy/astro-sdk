@@ -9,6 +9,10 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import ly.neptune.astro.models.AstroError
 import ly.neptune.astro.payments.PaymentsClient
 import ly.neptune.astro.alias.AliasClient
@@ -93,14 +97,14 @@ internal class HttpEngine(private val config: AstroConfig) {
 
     suspend inline fun <reified T> handleResponse(response: HttpResponse): T {
         if (!response.status.isSuccess()) {
-            val err = runCatching { response.body<Map<String, Any>>() }.getOrNull()
-            val errObj = (err?.get("error") as? Map<*, *>)
+            val payload = runCatching { json.parseToJsonElement(response.bodyAsText()).jsonObject }.getOrNull()
+            val errObj = (payload?.get("error") as? JsonObject) ?: payload
             throw AstroRequestException(
                 status = response.status.value,
-                code = errObj?.get("code")?.toString() ?: "UNKNOWN_ERROR",
-                message = errObj?.get("message")?.toString() ?: "HTTP ${response.status.value}",
-                detail = errObj?.get("detail")?.toString(),
-                requestId = errObj?.get("request_id")?.toString()
+                code = errObj?.get("code")?.jsonPrimitive?.contentOrNull ?: "UNKNOWN_ERROR",
+                message = errObj?.get("message")?.jsonPrimitive?.contentOrNull ?: "HTTP ${response.status.value}",
+                detail = errObj?.get("detail")?.jsonPrimitive?.contentOrNull,
+                requestId = errObj?.get("request_id")?.jsonPrimitive?.contentOrNull
             )
         }
         return response.body()

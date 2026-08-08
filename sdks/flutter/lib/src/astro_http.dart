@@ -67,6 +67,17 @@ class AstroHttpClient {
     return _handle(response);
   }
 
+  Future<dynamic> patch(String path, [Object? body]) async {
+    final response = await http
+        .patch(
+          _uri(path),
+          headers: _defaultHeaders,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(timeout);
+    return _handle(response);
+  }
+
   Future<dynamic> delete(String path) async {
     final response = await http.delete(_uri(path), headers: _defaultHeaders).timeout(timeout);
     return _handle(response);
@@ -77,11 +88,15 @@ class AstroHttpClient {
       if (response.body.isEmpty) return null;
       return jsonDecode(response.body);
     }
-    final body = response.body.isNotEmpty ? jsonDecode(response.body) as Map<String, dynamic> : null;
-    final err = body?['error'] as Map<String, dynamic>?;
+    final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
+    final body = decoded is Map<String, dynamic> ? decoded : null;
+    final nested = body?['error'];
+    final err = nested is Map<String, dynamic> ? nested : body;
     throw AstroError(
       code: err?['code'] as String? ?? 'UNKNOWN_ERROR',
-      message: err?['message'] as String? ?? 'HTTP ${response.statusCode}',
+      message: nested is String
+          ? nested
+          : err?['message'] as String? ?? 'HTTP ${response.statusCode}',
       statusCode: response.statusCode,
       detail: err?['detail'] as String?,
     );

@@ -14,11 +14,21 @@ public final class AliasClient {
     }
 
     public func resolve(_ alias: String) async throws -> ResolveResult {
-        try await http.perform(http.request(http.url("/alias/\(alias)/resolve")))
+        try await http.perform(http.request(http.url("/identity/resolve", query: ["alias": alias])))
     }
 
     public func deactivate(_ alias: String) async throws -> AliasProfile {
         try await http.perform(http.request(http.url("/alias/\(alias)/deactivate"), method: "POST"))
+    }
+
+    /// Bank-server only. UNKNOWN is a registry transport state, not availability.
+    public func availability(_ alias: String) async throws -> AliasAvailability {
+        try await http.perform(http.request(http.url("/alias/\(alias)/availability")))
+    }
+
+    /// Bank-server only. Identity permanently retires the previous NPT name.
+    public func rename(_ request: RenameAliasRequest) async throws -> RenameAliasResult {
+        try await http.perform(http.request(http.url("/alias/rename"), method: "PATCH", body: request))
     }
 }
 

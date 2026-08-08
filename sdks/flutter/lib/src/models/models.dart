@@ -586,6 +586,72 @@ class LinkedAccount {
       );
 }
 
+class AliasAvailability {
+  final String aliasUsername;
+  final String status;
+  final bool available;
+
+  const AliasAvailability({
+    required this.aliasUsername,
+    required this.status,
+    required this.available,
+  });
+
+  factory AliasAvailability.fromJson(Map<String, dynamic> j) => AliasAvailability(
+        aliasUsername: j['alias_username'] as String,
+        status: j['status'] as String,
+        available: j['available'] as bool? ?? false,
+      );
+}
+
+class RenameAliasRequest {
+  final String currentAliasUsername;
+  final String newAliasUsername;
+  final String nationalId;
+
+  const RenameAliasRequest({
+    required this.currentAliasUsername,
+    required this.newAliasUsername,
+    required this.nationalId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'current_alias_username': currentAliasUsername,
+        'new_alias_username': newAliasUsername,
+        'national_id': nationalId,
+      };
+}
+
+class RenameAliasResult {
+  final String aliasUsername;
+  final String previousAliasUsername;
+  final String retiredHandle;
+  final bool previousRetired;
+  final bool reauthenticationRequired;
+  final String nextStep;
+  final String message;
+
+  const RenameAliasResult({
+    required this.aliasUsername,
+    required this.previousAliasUsername,
+    required this.retiredHandle,
+    required this.previousRetired,
+    required this.reauthenticationRequired,
+    required this.nextStep,
+    required this.message,
+  });
+
+  factory RenameAliasResult.fromJson(Map<String, dynamic> j) => RenameAliasResult(
+        aliasUsername: j['alias_username'] as String,
+        previousAliasUsername: j['previous_alias_username'] as String,
+        retiredHandle: j['retired_handle'] as String,
+        previousRetired: j['previous_retired'] as bool,
+        reauthenticationRequired: j['reauthentication_required'] as bool,
+        nextStep: j['next_step'] as String,
+        message: j['message'] as String,
+      );
+}
+
 // ─── Open Banking ────────────────────────────────────────────────────────────
 
 class Consent {

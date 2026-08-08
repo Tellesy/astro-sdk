@@ -220,8 +220,18 @@ var AliasClient = class {
   async deactivate(username) {
     return this.http.delete(`/alias/${encodeURIComponent(username)}`);
   }
+  /** Bank-server only. UNKNOWN means Identity could not be consulted; never treat it as available. */
+  async availability(username) {
+    return this.http.get(
+      `/alias/${encodeURIComponent(username)}/availability`
+    );
+  }
+  /** Bank-server only. A successful rename permanently retires the previous NPT name. */
+  async rename(params) {
+    return this.http.patch("/alias/rename", params);
+  }
   async resolve(alias) {
-    return this.http.get(`/v1/identity/resolve`, { alias });
+    return this.http.get(`/identity/resolve`, { alias });
   }
 };
 
@@ -289,33 +299,33 @@ var IdentityClient = class {
     this.http = http;
   }
   async resolve(alias) {
-    return this.http.get("/v1/identity/resolve", { alias });
+    return this.http.get("/identity/resolve", { alias });
   }
   async getProfile(handle) {
-    return this.http.get(`/v1/identity/${encodeURIComponent(handle)}`);
+    return this.http.get(`/identity/${encodeURIComponent(handle)}`);
   }
   async claimHandle(params) {
-    return this.http.post("/v1/identity/claim", params);
+    return this.http.post("/identity/claim", params);
   }
   async getAccounts(handle) {
-    return this.http.get(`/v1/identity/${encodeURIComponent(handle)}/accounts`);
+    return this.http.get(`/identity/${encodeURIComponent(handle)}/accounts`);
   }
   async linkAccount(handle, params) {
-    return this.http.post(`/v1/identity/${encodeURIComponent(handle)}/accounts`, params);
+    return this.http.post(`/identity/${encodeURIComponent(handle)}/accounts`, params);
   }
   async setDefaultAccount(handle, bankHandle) {
-    return this.http.patch(`/v1/identity/${encodeURIComponent(handle)}/default`, {
+    return this.http.patch(`/identity/${encodeURIComponent(handle)}/default`, {
       bank_handle: bankHandle
     });
   }
   async deleteIdentity(handle) {
-    return this.http.delete(`/v1/identity/${encodeURIComponent(handle)}`);
+    return this.http.delete(`/identity/${encodeURIComponent(handle)}`);
   }
   async listBanks() {
-    return this.http.get("/v1/banks");
+    return this.http.get("/banks");
   }
   async getRegistryInfo() {
-    return this.http.get("/v1/registry/info");
+    return this.http.get("/registry/info");
   }
 };
 

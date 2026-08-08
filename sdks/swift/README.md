@@ -2,16 +2,44 @@
 
 Swift SDK for OpenWave-compatible payment gateways. Requires iOS 15+ / macOS 12+. Uses Swift Concurrency (`async/await`) and `CryptoKit`.
 
+Current additive API release: **1.1.0**. SwiftPM derives package versions from repository tags; `Package.swift` intentionally has no version field.
+
 ## Installation (Swift Package Manager)
 
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/neptune-astro/astro-swift", from: "1.0.0")
+    .package(path: "../astro-sdk/sdks/swift")
 ]
 ```
 
-Or in Xcode: **File → Add Package Dependencies** → paste the repo URL.
+The public SDK monorepo currently distributes Swift from `sdks/swift`; clone it and add that directory as a local package in Xcode. Do not point SwiftPM at the monorepo root until a root package manifest or dedicated tagged Swift repository is published.
+
+## NPT availability and rename (bank server only)
+
+```swift
+let bankAstro = AstroClient(config: AstroConfig(
+    baseURL: URL(string: "https://astro.neptune.ly/api/v1")!,
+    bankKey: ProcessInfo.processInfo.environment["OPENWAVE_BANK_KEY"]
+))
+
+let availability = try await bankAstro.alias.availability("mtellesy.new")
+guard availability.status != "UNKNOWN" else {
+    throw RegistryUnavailable()
+}
+
+let result = try await bankAstro.alias.rename(RenameAliasRequest(
+    currentAliasUsername: "mtellesy",
+    newAliasUsername: "mtellesy.new",
+    nationalId: "123456789012"
+))
+assert(result.previousRetired) // the old NPT name can never be reused
+assert(result.reauthenticationRequired)
+print(result.retiredHandle)
+print(result.nextStep) // End old sessions; sign in again with the new NPT name.
+```
+
+Keep the bank key and national ID outside customer iOS builds. The bank backend must propagate `nextStep` and require a clean sign-in when `reauthenticationRequired` is true. OpenWave Identity remains authoritative for ownership, permanent retirement, and login-approval challenges.
 
 ## Quick Start
 
@@ -43,89 +71,12 @@ await UIApplication.shared.open(url)
 
 | Property | Type | Description |
 |---|---|---|
-| `astro.payments` | `PaymentsClient` | Sessions, refunds, mandates, mandate charges |
-| `astro.alias` | `AliasClient` | Profile, accounts, resolve |
+| `astro.payments` | `PaymentsClient` | Sessions, mandates |
+| `astro.alias` | `AliasClient` | Profile, accounts, resolve, availability, bank-server rename |
 | `astro.openBanking` | `OpenBankingClient` | Consent, token, accounts, transactions |
+| Credit & Finance handoff | Backend-created hosted URL | Finance offer acceptance |
 | `astro.identity` | `IdentityClient` | Resolve alias, list banks |
 | `astro.webhookVerifier(secret:)` | `WebhookVerifier` | HMAC-SHA256 verification |
-
-## Presented Payments
-
-The Swift SDK supports the iOS side of presented payments:
-
-- render or consume merchant-presented QR
-- trigger NFC handoff where the operator enables it
-- continue mandate approval or one-time payment after a presentment claim
-
-Whether the flow is gateway-mediated or direct-bank or wallet-controlled, the claim response returns `payment_url`, `mandate_consent_url`, or `auth_surface`, and the customer must still authorize inside that trusted secure surface.
-
-For QR scanning, keep the existing domestic QR parser and add OpenWave detection as a branch: parse EMV TLV, search Merchant Account Information templates for `00 = LY.OPENWAVE`, then claim the presentment. If the marker is absent, the app should continue through the normal NUMO/LYPay QR flow. NFC should use an NFC Forum NDEF URI record, preferably an HTTPS universal link handled by the bank or wallet app.
-
-For recurring mandate approval, expect `auth_surface.type = "HOSTED_MANDATE_CONSENT"` or a `mandate_consent_url`.
-
-Merchant apps must not collect OTP, PIN, passcode, push approval, or bank credentials.
-
-```swift
-let presentment = try await astro.presentments.create(
-    CreatePresentmentRequest(
-        channel: "QR",
-        mode: "MERCHANT_PRESENTED",
-        intent: "ONE_TIME_PAYMENT",
-        amountMode: "FIXED",
-        amount: 860_000,
-        currency: "LYD",
-        description: "Neptune Store checkout"
-    ),
-    idempotencyKey: "pos-order-1042"
-)
-
-let claim = try await astro.presentments.claim(
-    presentment.presentmentId,
-    request: ClaimPresentmentRequest(
-        claimToken: presentment.presentmentPayload?.claimToken,
-        payerAlias: "tellesy@andalus"
-    )
-)
-
-if let url = URL(string: claim.authSurface?.url ?? claim.paymentUrl ?? "") {
-    await UIApplication.shared.open(url)
-}
-```
-
-## Refunds and recurring charges
-
-```swift
-let refund = try await astro.payments.createRefund(
-    sessionId: session.sessionId,
-    request: CreateRefundRequest(
-        amount: 20_000,
-        currency: "LYD",
-        merchantReference: "refund-order-1042-item-1",
-        reason: "Customer returned one item"
-    ),
-    idempotencyKey: "refund-order-1042-item-1"
-)
-
-let mandate = try await astro.payments.createMandate(
-    CreateMandateRequest(
-        payerAlias: "tellesy@andalus",
-        amountLimit: 50_000,
-        currency: "LYD",
-        frequency: "MONTHLY",
-        description: "Premium support plan",
-        consentRedirectUrl: "myapp://subscription/return"
-    ),
-    idempotencyKey: "sub-1042"
-)
-
-try await astro.payments.chargeMandate(
-    mandate.mandateId,
-    request: ChargeMandateRequest(amount: 50_000, description: "Premium support monthly charge"),
-    idempotencyKey: "sub-1042-2026-05"
-)
-```
-
-Fulfil orders only after your backend receives a signed `payment.completed` webhook or confirms final server status. App callbacks and `payment.settlement_pending` are not fulfilment proof.
 
 ## Payment Result Handling (Deep Link)
 
@@ -168,6 +119,10 @@ let accounts = try await astro.openBanking.getAccounts(
     consentId: consent.consentId
 )
 ```
+
+## Credit & Finance handoff
+
+iOS apps should open hosted finance acceptance URLs returned by a trusted backend. Do not expose finance provider keys or assessment details in the app.
 
 ## Webhook Verification (Server-Side Swift / Vapor)
 
